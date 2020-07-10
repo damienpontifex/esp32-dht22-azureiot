@@ -1,36 +1,49 @@
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <dht.h>
+#include <freertos/event_groups.h>
+// #include <dht.h>
 #include <esp_wifi.h>
 #include <esp_log.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
 
-static const dht_sensor_type_t sensor_type = DHT_TYPE_AM2301;
-static const gpio_num_t dht_gpio = 17;
+#include "iothub_client_sample_mqtt.h"
+
+// static const dht_sensor_type_t sensor_type = DHT_TYPE_AM2301;
+// static const gpio_num_t dht_gpio = 17;
 
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 
 static const char *TAG = "power_save";
 
-void dht_test(void *pvParameters)
-{
-  float temperature = 0;
-  float humidity = 0;
+EventGroupHandle_t wifi_event_group;
 
-  while (1)
-  {
-    if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) {
-      printf("Humidity: %.2f%% Temp: %.2fC\n", humidity, temperature);
-    } else {
-      printf("Could not read data from sensor\n");
-    }
+#ifndef BIT0
+#define BIT0 (0x1 << 0)
+#endif
+/* The event group allows multiple bits for each event,
+   but we only care about one event - are we connected
+   to the AP with an IP? */
+const int CONNECTED_BIT = BIT0;
 
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-  }
-}
+//void dht_test(void *pvParameters)
+//{
+//  float temperature = 0;
+//  float humidity = 0;
+//
+//  while (1)
+//  {
+//    if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) {
+//      printf("Humidity: %.2f%% Temp: %.2fC\n", humidity, temperature);
+//    } else {
+//      printf("Could not read data from sensor\n");
+//    }
+//
+//    vTaskDelay(2000 / portTICK_PERIOD_MS);
+//  }
+//}
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -73,9 +86,20 @@ static void initialise_wifi(void)
   esp_wifi_set_ps(WIFI_PS_NONE);
 }
 
+void azure_task(void *pvParameter)
+{
+    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,
+                        false, true, portMAX_DELAY);
+    ESP_LOGI(TAG, "Connected to AP success!");
+
+    iothub_client_sample_mqtt_run();
+
+    vTaskDelete(NULL);
+}
+
 void app_main()
 {
-  // Initialise NVS
+  // Initialise Non Volatile Storage (NVS)
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
@@ -84,4 +108,8 @@ void app_main()
   ESP_ERROR_CHECK(ret);
   // xTaskCreate(dht_test, "dht_test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
   initialise_wifi();
+
+  if ( xTaskCreate(&azure_task, "azure_task", 1024 * 5, NULL, 5, NULL) != pdPASS ) {
+      printf("create azure task failed\r\n");
+  }
 }
