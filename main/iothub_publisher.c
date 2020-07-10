@@ -36,7 +36,6 @@ static const gpio_num_t dht_gpio = 17;
 
 static int callbackCounter;
 static char msgText[1024];
-static bool g_continueRunning;
 #define DOWORK_LOOP_NUM     3
 
 static const char *TAG = "iothub";
