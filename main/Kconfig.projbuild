@@ -24,7 +24,7 @@ config IOTHUB_CONNECTION_STRING
 
 config MESSAGE_INTERVAL_TIME
     int "Time delay in Milliseconds between two consecutive messages"
-    default 100
+    default 10000
     help
         Set time delay between two consecutive message sent to the cloud
 
