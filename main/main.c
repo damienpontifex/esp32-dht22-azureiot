@@ -2,22 +2,17 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
-// #include <dht.h>
 #include <esp_wifi.h>
 #include <esp_log.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
-
-#include "iothub_client_sample_mqtt.h"
-
-// static const dht_sensor_type_t sensor_type = DHT_TYPE_AM2301;
-// static const gpio_num_t dht_gpio = 17;
 
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 
 static const char *TAG = "power_save";
 
+extern void iothub_client_sample_mqtt_run(void);
 EventGroupHandle_t wifi_event_group;
 
 #ifndef BIT0
@@ -27,23 +22,6 @@ EventGroupHandle_t wifi_event_group;
    but we only care about one event - are we connected
    to the AP with an IP? */
 const int CONNECTED_BIT = BIT0;
-
-//void dht_test(void *pvParameters)
-//{
-//  float temperature = 0;
-//  float humidity = 0;
-//
-//  while (1)
-//  {
-//    if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) {
-//      printf("Humidity: %.2f%% Temp: %.2fC\n", humidity, temperature);
-//    } else {
-//      printf("Could not read data from sensor\n");
-//    }
-//
-//    vTaskDelay(2000 / portTICK_PERIOD_MS);
-//  }
-//}
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
