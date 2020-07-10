@@ -5,6 +5,7 @@
 #include <esp_log.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
+#include <driver/timer.h>
 
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
@@ -66,15 +67,13 @@ static void initialise_wifi(void)
   esp_wifi_set_ps(WIFI_PS_NONE);
 }
 
-void azure_task(void *pvParameter)
+void setup_azure_task() 
 {
-    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,
-                        false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "Connected to AP success!");
+  xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true,
+                      portMAX_DELAY);
+  ESP_LOGI(TAG, "Connected to AP success!");
 
-    iothub_client_sample_mqtt_run();
-
-    vTaskDelete(NULL);
+  iothub_client_sample_mqtt_run();
 }
 
 void app_main()
@@ -86,10 +85,7 @@ void app_main()
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
-  // xTaskCreate(dht_test, "dht_test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
   initialise_wifi();
 
-  if ( xTaskCreate(&azure_task, "azure_task", 1024 * 5, NULL, 5, NULL) != pdPASS ) {
-    printf("create azure task failed\r\n");
-  }
+  setup_azure_task();
 }

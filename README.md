@@ -16,6 +16,7 @@ source $HOME/esp/esp-idf/export.sh
 
 idf.py menuconfig
 # Set iot hub connection string and wifi details
+# Set Component config --> FreeRTOS --> FreeRTOS timer task stack size (4096)
 ESPPORT=/dev/cu.SLAB_USBtoUART idf.py flash monitor
 ```
 

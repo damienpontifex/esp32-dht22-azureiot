@@ -13,6 +13,7 @@
 #include <esp_system.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/event_groups.h>
 #include <freertos/task.h>
 
 #ifdef MBED_BUILD_TIMESTAMP
@@ -59,6 +60,54 @@ static void SendConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_RESULT result, v
   IoTHubMessage_Destroy(eventInstance->messageHandle);
 }
 
+static IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
+volatile static int iterator = 0;
+
+void ensure_messages_sent()
+{
+  IOTHUB_CLIENT_STATUS Status;
+  while ((IoTHubClient_LL_GetSendStatus(iotHubClientHandle, &Status) == IOTHUB_CLIENT_OK) && (Status == IOTHUB_CLIENT_SEND_STATUS_BUSY))
+  {
+    IoTHubClient_LL_DoWork(iotHubClientHandle);
+    ThreadAPI_Sleep(10);
+  }
+}
+
+void vTimerCallback( TimerHandle_t pxTimer )
+{
+  ESP_LOGI(TAG, "vTimerCallback");
+  time_t current_time = 0;
+  float temperature = 0;
+  float humidity = 0;
+  time(&current_time);
+  if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) 
+  {
+    EVENT_INSTANCE message;
+    sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"espdevice\",\"temperature\":%.2f,\"humidity\":%.2f}", temperature, humidity);
+    if ((message.messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
+    {
+      ESP_LOGE(TAG, "ERROR: iotHubMessageHandle is NULL!\r\n");
+    }
+    else
+    {
+      message.messageTrackingId = iterator;
+
+      if (IoTHubClient_LL_SendEventAsync(iotHubClientHandle, message.messageHandle, SendConfirmationCallback, &message) != IOTHUB_CLIENT_OK)
+      {
+        ESP_LOGE(TAG, "ERROR: IoTHubClient_LL_SendEventAsync..........FAILED!\r\n");
+      }
+      else
+      {
+        ESP_LOGI(TAG, "IoTHubClient_LL_SendEventAsync accepted message [%d] for transmission to IoT Hub.\r\n", (int)iterator);
+      }
+    }
+    iterator++;
+
+    ensure_messages_sent();
+  }
+}
+
+static TimerHandle_t timer;
 void connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS result, IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason, void* userContextCallback)
 {
   ESP_LOGI(TAG, "\n\nConnection Status result:%s, Connection Status reason: %s\n\n", MU_ENUM_TO_STRING(IOTHUB_CLIENT_CONNECTION_STATUS, result),
@@ -67,11 +116,6 @@ void connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS result, IOTHUB_C
 
 void iothub_client_sample_mqtt_run(void)
 {
-  IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
-
-  EVENT_INSTANCE message;
-
-  g_continueRunning = true;
   srand((unsigned int)time(NULL));
 
   callbackCounter = 0;
@@ -98,56 +142,23 @@ void iothub_client_sample_mqtt_run(void)
       IoTHubDeviceClient_LL_SetOption(iotHubClientHandle, OPTION_TRUSTED_CERT, certificates);
 #endif // SET_TRUSTED_CERT_IN_SAMPLES
 
-      /* Now that we are ready to receive commands, let's send some messages */
-      int iterator = 0;
-      float temperature = 0;
-      float humidity = 0;
-      time_t sent_time = 0;
-      time_t current_time = 0;
-      do
-      {
-        time(&current_time);
-        
-        if (iterator <= callbackCounter
-            && (difftime(current_time, sent_time) > ((CONFIG_MESSAGE_INTERVAL_TIME) / 1000))
-            && (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK))
-        {
-          sprintf_s(msgText, sizeof(msgText), "{\"deviceId\":\"espdevice\",\"temperature\":%.2f,\"humidity\":%.2f}", temperature, humidity);
-          if ((message.messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
-          {
-            ESP_LOGE(TAG, "ERROR: iotHubMessageHandle is NULL!\r\n");
-          }
-          else
-          {
-            message.messageTrackingId = iterator;
+      timer = xTimerCreate("timer", CONFIG_MESSAGE_INTERVAL_TIME / portTICK_PERIOD_MS, pdTRUE, 0, vTimerCallback);
+      xTimerStart(timer, 0);
 
-            if (IoTHubClient_LL_SendEventAsync(iotHubClientHandle, message.messageHandle, SendConfirmationCallback, &message) != IOTHUB_CLIENT_OK)
-            {
-              ESP_LOGE(TAG, "ERROR: IoTHubClient_LL_SendEventAsync..........FAILED!\r\n");
-            }
-            else
-            {
-              time(&sent_time);
-              ESP_LOGE(TAG, "IoTHubClient_LL_SendEventAsync accepted message [%d] for transmission to IoT Hub.\r\n", (int)iterator);
-            }
-          }
-          iterator++;
-        }
-        IoTHubClient_LL_DoWork(iotHubClientHandle);
-        ThreadAPI_Sleep(10);
-
-      } while (g_continueRunning);
-
-      ESP_LOGI(TAG, "iothub_client_sample_mqtt has gotten quit message, call DoWork %d more time to complete final sending...\r\n", DOWORK_LOOP_NUM);
-      size_t index = 0;
-      for (index = 0; index < DOWORK_LOOP_NUM; index++)
-      {
-        IoTHubClient_LL_DoWork(iotHubClientHandle);
-        ThreadAPI_Sleep(1);
-      }
-      IoTHubClient_LL_Destroy(iotHubClientHandle);
+      ESP_LOGI(TAG, "IoT Client setup done");
     }
-    platform_deinit();
   }
+}
+
+void cleanup()
+{
+  if (timer != NULL) {
+    xTimerStop(timer, 100);
+    timer = NULL;
+  }
+  ESP_LOGI(TAG, "iothub_client_sample_mqtt has gotten quit message, finalising any outgoing messages\r\n");
+  ensure_messages_sent();
+  IoTHubClient_LL_Destroy(iotHubClientHandle);
+  platform_deinit();
 }
 
