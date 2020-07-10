@@ -13,7 +13,10 @@ cd <your-dev-directory>
 git clone https://github.com/damienpontifex/esp32-dht22.git
 cd esp32-dht22.git
 source $HOME/esp/esp-idf/export.sh
-idf.py build
+
+idf.py menuconfig
+# Set iot hub connection string and wifi details
+ESPPORT=/dev/cu.SLAB_USBtoUART idf.py flash monitor
 ```
 
 Uses [CMake FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html) to get dependent components as part of build
