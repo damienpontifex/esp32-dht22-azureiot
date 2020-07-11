@@ -10,11 +10,13 @@ cd $HOME/esp/esp-idf
 ./install.sh
 
 cd <your-dev-directory>
-git clone https://github.com/damienpontifex/esp32-dht22.git
-cd esp32-dht22.git
+git clone https://github.com/damienpontifex/esp32-dht22-azureiot.git
+cd esp32-dht22-azureiot
 source $HOME/esp/esp-idf/export.sh
 
 idf.py menuconfig
+idf.py -G Ninja build
+
 # Set iot hub connection string and wifi details
 # Set Component config --> FreeRTOS --> FreeRTOS timer task stack size (4096)
 ESPPORT=/dev/cu.SLAB_USBtoUART idf.py flash monitor
