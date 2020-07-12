@@ -1,0 +1,116 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "appName": {
+      "type": "string",
+      "defaultValue": "pontifex"
+    }
+  },
+  "variables": {
+    "commonTags": {
+      "environment": "dev",
+      "applicationName": "esp32-dth22"
+    },
+    "tsiConsumerGroupName": "TsiConsumerGroup",
+    "storageName": "[concat(parameters('appName'), 'tsistore')]"
+  },
+  "resources": [
+    {
+      "name": "[parameters('appname')]",
+      "type": "Microsoft.Devices/IotHubs",
+      "apiVersion": "2020-03-01",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "F1",
+        "capacity": 1
+      },
+      "properties": {
+        "eventHubEndpoints": {
+          "events": {
+            "partitionCount": 2,
+            "retentionTimeInDays": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('appName'), '/events/', variables('tsiConsumerGroupName'))]",
+      "type": "Microsoft.Devices/IotHubs/eventHubEndpoints/ConsumerGroups",
+      "apiVersion": "2020-03-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Devices/IotHubs', parameters('appName'))]"
+      ]
+    },
+    {
+      "name": "[parameters('appname')]",
+      "type": "Microsoft.TimeSeriesInsights/environments",
+      "apiVersion": "2018-08-15-preview",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "L1",
+        "capacity": 1
+      },
+      "kind": "LongTerm",
+      "properties": {
+        "timeSeriesIdProperties": [
+          {
+            "name": "iothub-connection-device-id",
+            "type": "string"
+          }
+        ],
+        "storageConfiguration": {
+          "accountName": "[variables('storageName')]",
+          "managementKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2019-06-01').keys[0].value]"
+        },
+        "warmStoreConfiguration": {
+          "dataRetention": "P7D"
+        }
+      },
+      "resources": [
+        {
+          "name": "[parameters('appName')]",
+          "type": "eventSources",
+          "apiVersion": "2018-08-15-preview",
+          "location": "[parameters('location')]",
+          "tags": "[variables('commontags')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.TimeSeriesInsights/environments', parameters('appname'))]"
+          ],
+          "kind": "Microsoft.IoTHub",
+          "properties": {
+            "eventSourceResourceId": "[resourceId('Microsoft.Devices/IotHubs', parameters('appname'))]",
+            "iotHubName": "[parameters('appname')]",
+            "keyName": "iothubowner",
+            "consumerGroupName": "[variables('tsiConsumerGroupName')]",
+            "timestampPropertyName": "timestamp",
+            "sharedAccessKey": "[listkeys(resourceId('Microsoft.Devices/IoTHubs/IotHubKeys', parameters('appName'), 'service'), '2020-03-01').primaryKey]"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {}
+    }
+  ],
+  "outputs": {
+    "dataAccessFQDN": {
+      "value": "[reference(resourceId('Microsoft.TimeSeriesInsights/environments', parameters('appName'))).dataAccessFQDN]",
+      "type": "string"
+    }
+  }
+}
