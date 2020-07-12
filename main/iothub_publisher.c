@@ -79,10 +79,13 @@ void vTimerCallback( TimerHandle_t pxTimer )
   float temperature = 0;
   float humidity = 0;
   time(&current_time);
-  if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) 
+  if (dht_read_float_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK)
   {
+    char buf[21];
+    struct tm *ptm = gmtime(&current_time);
+    strftime(buf, 21, "%FT%TZ", ptm);
     EVENT_INSTANCE message;
-    sprintf_s(msgText, sizeof(msgText), "{\"temperature\":%.2f,\"humidity\":%.2f}", temperature, humidity);
+    sprintf_s(msgText, sizeof(msgText), "{\"timestamp\": \"%s\", \"temperature\":%.2f,\"humidity\":%.2f}", buf, temperature, humidity);
     if ((message.messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
     {
       ESP_LOGE(TAG, "ERROR: iotHubMessageHandle is NULL!\r\n");

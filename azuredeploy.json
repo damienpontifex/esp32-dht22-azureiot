@@ -9,6 +9,15 @@
     "appName": {
       "type": "string",
       "defaultValue": "pontifex"
+    },
+    "accessPolicyReaderObjectIds": {
+      "type": "array",
+      "defaultValue": [
+        "01c9f9ea-c5b3-4e43-a2f8-d60fa4ba6d8d"
+      ],
+      "metadata": {
+        "description": "A list of object ids of the users or applications in AAD that should have Reader access to the environment. The service principal objectId can be obtained by calling the Get-AzureRMADUser or the Get-AzureRMADServicePrincipal cmdlets. Creating an access policy for AAD groups is not yet supported."
+      }
     }
   },
   "variables": {
@@ -105,6 +114,25 @@
       },
       "kind": "StorageV2",
       "properties": {}
+    },
+    {
+      "condition": "[not(empty(parameters('accessPolicyReaderObjectIds')))]",
+      "type": "Microsoft.TimeSeriesInsights/environments/accesspolicies",
+      "apiVersion": "2018-08-15-preview",
+      "name": "[concat(parameters('appName'), '/', 'readerAccessPolicy', copyIndex())]",
+      "dependsOn": [
+        "[resourceId('Microsoft.TimeSeriesInsights/environments', parameters('appName'))]"
+      ],
+      "copy": {
+        "name": "accessPolicyReaderCopy",
+        "count": "[if(empty(parameters('accessPolicyReaderObjectIds')), 1, length(parameters('accessPolicyReaderObjectIds')))]"
+      },
+      "properties": {
+        "principalObjectId": "[parameters('accessPolicyReaderObjectIds')[copyIndex()]]",
+        "roles": [
+          "Reader"
+        ]
+      }
     }
   ],
   "outputs": {
